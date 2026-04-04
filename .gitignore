@@ -1,0 +1,31 @@
+# 依存関係
+node_modules/
+
+# ビルド成果物
+out/
+dist/
+
+# ログ
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# エディタ
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# 環境変数
+.env
+.env.local
+
+# electron-builder キャッシュ
+electron-builder-cache/
