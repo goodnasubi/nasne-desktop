@@ -94,7 +94,6 @@ function getDateGroupKey(dateStr: string): string {
   if (diffDays === 0) return '今日'
   if (diffDays === 1) return '昨日'
   if (diffDays <= 7) return '今週'
-  if (diffDays <= 30) return `${month}月`
   return `${year}年${month}月`
 }
 
