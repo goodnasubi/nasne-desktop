@@ -200,8 +200,58 @@ const GENRE_MAP: Record<number, string> = {
   15: 'その他'
 }
 
-function mapGenre(genre?: any): string | undefined {
-  if (!genre) return undefined
+// ARIB STD-B10 副ジャンル (ContentNibbleLevel2) マップ
+// キー: level1 * 16 + level2
+const GENRE_DETAIL_MAP: Record<number, string> = {
+  // 0: ニュース/報道
+  0x00: '定時・総合', 0x01: '天気', 0x02: '特集・ドキュメント', 0x03: '政治・国会',
+  0x04: '経済・市況', 0x05: '海外・国際', 0x06: '解説', 0x07: '討論・会談',
+  0x08: '報道特番', 0x09: 'ローカル・地域', 0x0A: '交通',
+  // 1: スポーツ
+  0x10: 'スポーツニュース', 0x11: '野球', 0x12: 'サッカー', 0x13: 'ゴルフ',
+  0x14: 'その他球技', 0x15: '相撲・格闘技', 0x16: 'オリンピック・国際大会',
+  0x17: 'マリン・ウィンタースポーツ', 0x18: '競馬・公営競技', 0x19: 'モータースポーツ',
+  0x1A: 'マラソン・陸上・水泳', 0x1B: '体操・新体操', 0x1C: '社会人・アマチュア',
+  // 2: 情報/ワイドショー
+  0x20: '芸能・ワイドショー', 0x21: 'ファッション', 0x22: '暮らし・住まい',
+  0x23: '健康・医療', 0x24: 'ショッピング・通販', 0x25: 'グルメ・料理',
+  0x26: 'イベント', 0x27: '番組紹介・お知らせ',
+  // 3: ドラマ
+  0x30: '国内ドラマ', 0x31: '海外ドラマ', 0x32: '時代劇',
+  // 4: 音楽
+  0x40: '国内ロック・ポップス', 0x41: '海外ロック・ポップス', 0x42: 'クラシック・オペラ',
+  0x43: 'ジャズ・フュージョン', 0x44: 'ライトミュージック・フォーク',
+  0x45: '国内歌謡・演歌', 0x46: 'ワールドミュージック・民族音楽',
+  0x47: 'ポップミュージック', 0x48: 'サウンドトラック・映像音楽',
+  0x49: 'カラオケ・のど自慢',
+  // 5: バラエティ
+  0x50: 'クイズ', 0x51: 'ゲーム', 0x52: 'トークバラエティ',
+  0x53: 'お笑い・コメディ', 0x54: '音楽バラエティ', 0x55: '旅バラエティ',
+  0x56: '料理バラエティ',
+  // 6: 映画
+  0x60: '洋画', 0x61: '邦画', 0x62: 'アニメ',
+  // 7: アニメ/特撮
+  0x70: '国内アニメ', 0x71: '海外アニメ', 0x72: '特撮',
+  // 8: ドキュメンタリー/教養
+  0x80: '社会・時事', 0x81: '歴史・紀行', 0x82: '自然・動物・環境',
+  0x83: '宇宙・科学・医学', 0x84: 'カルチャー・伝統文化', 0x85: 'ドキュメンタリー全般',
+  0x86: 'インタビュー・討論',
+  // 9: 劇場/公演
+  0x90: '現代劇・新劇', 0x91: 'バレエ・ダンス', 0x92: '落語・演芸',
+  0x93: '歌舞伎・能・狂言', 0x94: 'オペラ・バレエ', 0x95: '演奏会・コンサート',
+  0x96: '演劇・ミュージカル',
+  // 10: 趣味/教育
+  0xA0: '旅・釣り・アウトドア', 0xA1: '園芸・ペット・手芸', 0xA2: '音楽・美術・工芸',
+  0xA3: '囲碁・将棋', 0xA4: '鉄道・乗り物', 0xA5: '占い・心霊',
+  0xA6: '小学生以下', 0xA7: '中学生・高校生', 0xA8: '大学生・受験',
+  0xA9: '生涯教育・資格', 0xAA: '教育問題',
+  // 11: 福祉
+  0xB0: '高齢者', 0xB1: '障害者', 0xB2: '社会福祉', 0xB3: 'ボランティア',
+  0xB4: '手話', 0xB5: '文字(字幕)', 0xB6: '音声解説',
+}
+
+function mapGenres(genre?: any): string[] {
+  if (!genre) return []
 
   // APIレスポンスが配列形式の場合（例: [{"id": 28927, "type": 2}]）
   // id は ARIB STD-B10 content_nibble 符号:
@@ -209,19 +259,34 @@ function mapGenre(genre?: any): string | undefined {
   //   bits 11-8  = ContentNibbleLevel2 (副ジャンル)
   //   bits  7-0  = 0xFF (ワイルドカード/未使用)
   if (Array.isArray(genre) && genre.length > 0) {
-    const firstGenre = genre[0]
-    if (typeof firstGenre === 'object' && 'id' in firstGenre && typeof firstGenre.id === 'number') {
-      const level1 = (firstGenre.id >> 12) & 0xF
-      return GENRE_MAP[level1] ?? 'その他'
+    // 重複排除キーを level1:level2 ペアにして、異なる副ジャンルを別エントリとして扱う
+    const seen = new Set<number>()
+    const result: string[] = []
+    for (const g of genre) {
+      if (typeof g === 'object' && 'id' in g && typeof g.id === 'number') {
+        const level1 = (g.id >> 12) & 0xF
+        const level2 = (g.id >> 8) & 0xF
+        const key = level1 * 16 + level2
+        if (seen.has(key)) continue
+        seen.add(key)
+        // level2 が 0xF (ワイルドカード) の場合は主ジャンル名のみ
+        if (level2 === 0xF) {
+          result.push(GENRE_MAP[level1] ?? 'その他')
+        } else {
+          const detailName = GENRE_DETAIL_MAP[key]
+          result.push(detailName ?? GENRE_MAP[level1] ?? 'その他')
+        }
+      }
     }
+    return result.length > 0 ? result : ['その他']
   }
 
   // 従来の単一数値形式の場合
   if (typeof genre === 'number') {
-    return GENRE_MAP[genre] || 'その他'
+    return [GENRE_MAP[genre] || 'その他']
   }
 
-  return 'その他'
+  return ['その他']
 }
 
 export type RecordedTitle = {
@@ -232,9 +297,9 @@ export type RecordedTitle = {
   serviceId?: string      // チャンネル ID
   chName?: string         // チャンネル名
   contentUrl?: string     // 再生 URL (DLNA)
-  genre?: string          // ジャンル名（マッピング済み）
+  genres?: string[]       // ジャンル名一覧（マッピング済み）
   description?: string
-  newFlag?: number        // 1=新番組
+  newFlag?: number        // nasne API から返されるフラグ（常に1のため新番組判定には使用しない）
 }
 
 export type Reservation = {
@@ -499,20 +564,12 @@ export const NasneAPI = {
         withUserData: '0'
       })
     const raw = await req<unknown>(ip, REMOTE_PORT, path)
-    const rawItems = extractItems<RecordedTitle>(raw)
-    // DEBUG: newFlag の値を確認（最初の10件）
-    console.log('[DEBUG] newFlag samples:', rawItems.slice(0, 10).map((t) => ({
-      title: (t as any).title?.slice(0, 20),
-      newFlag: (t as any).newFlag,
-      newFlagType: typeof (t as any).newFlag
-    })))
-    const items = rawItems.map((t) => ({
+    const items = extractItems<RecordedTitle>(raw).map((t) => ({
       ...t,
       title: cleanAribText(t.title),
       description: t.description ? cleanAribText(t.description) : t.description,
       chName: (t as any).channelName || t.chName,  // channelName を優先
-      genre: mapGenre((t as any).genre),  // 配列形式のジャンルを処理
-      newFlag: Number((t as any).newFlag) || 0  // 文字列 "1"/"0" を数値に正規化
+      genres: mapGenres((t as any).genre)  // 配列形式のジャンルを処理
     }))
     return { item: items, totalMatches: extractTotal(raw) }
   },

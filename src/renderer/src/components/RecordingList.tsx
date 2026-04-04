@@ -226,7 +226,7 @@ export default function RecordingList({ nasneIp }: Props) {
 
   const normalizedSearch = search.toLowerCase()
   const filtered = recordings.filter((r) => {
-    if (onlyNew && r.newFlag !== 1) return false
+    if (onlyNew && !/(?:^|[\s\u3000])(?:\[新\]|【新】)/.test(r.title)) return false
     const serviceName = serviceNames[normalizeServiceId(r.serviceId)] ?? ''
     return (
       !search ||
@@ -263,7 +263,7 @@ export default function RecordingList({ nasneIp }: Props) {
         key = getChannelGroupKey(rec)
         break
       case 'genre':
-        key = rec.genre || 'ジャンル不明'
+        key = rec.genres?.[0] || 'ジャンル不明'
         break
       case 'date':
         key = getDateGroupKey(rec.startDateTime)
@@ -441,7 +441,7 @@ export default function RecordingList({ nasneIp }: Props) {
                           <span className="meta-chip">{formatDateTime(rec.startDateTime)}</span>
                           <span className="meta-chip">{formatDuration(rec.duration)}</span>
                           {getChannelDisplayName(rec) && groupBy !== 'channel' && <span className="meta-chip">{getChannelDisplayName(rec)}</span>}
-                          {rec.genre && groupBy !== 'genre' && <span className="meta-chip">{rec.genre}</span>}
+                          {rec.genres && rec.genres.length > 0 && groupBy !== 'genre' && rec.genres.map((g, i) => <span key={`${g}-${i}`} className="meta-chip">{g}</span>)}
                         </div>
                       </div>
                       <div className="recording-actions">
@@ -470,7 +470,7 @@ export default function RecordingList({ nasneIp }: Props) {
                   <span className="meta-chip">{formatDateTime(rec.startDateTime)}</span>
                   <span className="meta-chip">{formatDuration(rec.duration)}</span>
                   {getChannelDisplayName(rec) && <span className="meta-chip">{getChannelDisplayName(rec)}</span>}
-                  {rec.genre && <span className="meta-chip">{rec.genre}</span>}
+                  {rec.genres && rec.genres.length > 0 && rec.genres.map((g, i) => <span key={`${g}-${i}`} className="meta-chip">{g}</span>)}
                 </div>
               </div>
               <div className="recording-actions">
