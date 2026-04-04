@@ -9,7 +9,31 @@
 export const STATUS_PORT = 64210
 export const REMOTE_PORT = 64220
 
-// ─── 型定義 ───────────────────────────────────
+// ─── ジャンルマッピング ───────────────────────────
+
+const GENRE_MAP: Record<number, string> = {
+  0: 'ニュース/報道',
+  1: 'スポーツ',
+  2: '情報/ワイドショー',
+  3: 'ドラマ',
+  4: '音楽',
+  5: 'バラエティ',
+  6: '映画',
+  7: 'アニメ/特撮',
+  8: 'ドキュメンタリー/教養',
+  9: '劇場/公演',
+  10: '趣味/教育',
+  11: '福祉',
+  12: '予備',
+  13: '予備',
+  14: '拡張',
+  15: 'その他'
+}
+
+function mapGenre(genre?: number): string | undefined {
+  if (genre === undefined) return undefined
+  return GENRE_MAP[genre] || 'その他'
+}
 
 export type RecordedTitle = {
   id: string
@@ -19,7 +43,7 @@ export type RecordedTitle = {
   serviceId?: string      // チャンネル ID
   chName?: string         // チャンネル名
   contentUrl?: string     // 再生 URL (DLNA)
-  genre?: string
+  genre?: string          // ジャンル名（マッピング済み）
   description?: string
 }
 
@@ -279,13 +303,15 @@ export const NasneAPI = {
         startingIndex: String(startIndex),
         requestedCount: String(count),
         sortCriteria: '0',
-        withDescriptionLong: '0',
+        withDescriptionLong: '1',  // 詳細な説明を取得
         withUserData: '0'
       })
     const raw = await req<unknown>(ip, REMOTE_PORT, path)
     const items = extractItems<RecordedTitle>(raw).map((t) => ({
       ...t,
-      title: cleanAribText(t.title)
+      title: cleanAribText(t.title),
+      description: t.description ? cleanAribText(t.description) : t.description,
+      genre: mapGenre(t.genre as number | undefined)
     }))
     return { item: items, totalMatches: extractTotal(raw) }
   },

@@ -187,6 +187,34 @@ body {
   gap: 8px;
 }
 
+.group-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.group-label {
+  font-weight: 500;
+}
+
+.group-select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+  min-width: 100px;
+}
+
+.group-select:focus {
+  border-color: var(--border-focus);
+}
+
 /* ── バッジ ────────────────────────────────────── */
 .badge {
   font-size: 11px;
@@ -1225,5 +1253,10 @@ select.field-input { appearance: auto; }
 }
 
 .group-items .recording-title {
-  display: none; /* グループヘッダーにタイトルがあるので隠す */
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
 }
+
