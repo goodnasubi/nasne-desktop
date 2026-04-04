@@ -103,11 +103,12 @@ function ReserveModal({ program, service, nasneIp, onClose }: ReserveModalProps)
     if (!serviceId) { setError('nasne の serviceId を入力してください'); return }
     setLoading(true); setError('')
     try {
+      // NHK API: 1=地デジ, 2=BS  →  nasne API: 2=地デジ, 3=BS (+1 でオフセット変換)
       await NasneAPI.createReservation(nasneIp, {
         title:            program.title,
         startDateTime:    startNasne,
         duration:         dur,
-        broadcastingType: service.broadcastingType,
+        broadcastingType: service.broadcastingType + 1,
         serviceId,
         quality:          Number(quality),
         storageId:        Number(storageId)

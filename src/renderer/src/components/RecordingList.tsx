@@ -70,11 +70,22 @@ function getChannelGroupKey(rec: RecordedTitle): string {
 
 // 日付からグループキーを生成
 function getDateGroupKey(dateStr: string): string {
-  if (!dateStr || !/^\d{14}$/.test(dateStr)) return '不明'
+  if (!dateStr) return '不明'
 
-  const year = dateStr.slice(0, 4)
-  const month = dateStr.slice(4, 6)
-  const day = dateStr.slice(6, 8)
+  let year: string, month: string, day: string
+  if (/^\d{14}$/.test(dateStr)) {
+    // YYYYMMDDHHmmss 形式
+    year  = dateStr.slice(0, 4)
+    month = dateStr.slice(4, 6)
+    day   = dateStr.slice(6, 8)
+  } else {
+    // ISO 8601 形式 ("2026-04-04T17:29:47+09:00" など)
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return '不明'
+    year  = String(d.getFullYear())
+    month = String(d.getMonth() + 1).padStart(2, '0')
+    day   = String(d.getDate()).padStart(2, '0')
+  }
 
   const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
   const today = new Date()

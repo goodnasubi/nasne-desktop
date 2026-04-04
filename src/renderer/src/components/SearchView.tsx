@@ -4,7 +4,7 @@ import { NasneAPI } from '../api/nasne'
 type ChannelOption = {
   serviceId: string
   name: string
-  broadcastingType: number  // 1=地デジ, 2=BS, 3=CS
+  broadcastingType: number  // 2=地デジ, 3=BS, 4=CS
 }
 
 // ─── ユーティリティ ──────────────────────────────────

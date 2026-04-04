@@ -200,15 +200,34 @@ const GENRE_MAP: Record<number, string> = {
   15: 'その他'
 }
 
-function mapGenre(genre?: number): string | undefined {
-  if (genre === undefined) return undefined
-  return GENRE_MAP[genre] || 'その他'
+function mapGenre(genre?: any): string | undefined {
+  if (!genre) return undefined
+
+  // APIレスポンスが配列形式の場合（例: [{"id": 28927, "type": 2}]）
+  // id は ARIB STD-B10 content_nibble 符号:
+  //   bits 15-12 = ContentNibbleLevel1 (主ジャンル)
+  //   bits 11-8  = ContentNibbleLevel2 (副ジャンル)
+  //   bits  7-0  = 0xFF (ワイルドカード/未使用)
+  if (Array.isArray(genre) && genre.length > 0) {
+    const firstGenre = genre[0]
+    if (typeof firstGenre === 'object' && 'id' in firstGenre && typeof firstGenre.id === 'number') {
+      const level1 = (firstGenre.id >> 12) & 0xF
+      return GENRE_MAP[level1] ?? 'その他'
+    }
+  }
+
+  // 従来の単一数値形式の場合
+  if (typeof genre === 'number') {
+    return GENRE_MAP[genre] || 'その他'
+  }
+
+  return 'その他'
 }
 
 export type RecordedTitle = {
   id: string
   title: string
-  startDateTime: string   // "YYYYMMDDHHmmss" 形式
+  startDateTime: string   // ISO 8601 形式 ("2026-04-04T17:29:47+09:00")
   duration: number        // 秒
   serviceId?: string      // チャンネル ID
   chName?: string         // チャンネル名
@@ -224,9 +243,9 @@ export type Reservation = {
   duration: number          // 秒
   serviceId: string         // チャンネル ID
   chName?: string
-  broadcastingType?: number // 1=地デジ, 2=BS, 3=CS
+  broadcastingType?: number // 2=地デジ, 3=BS, 4=CS
   quality: number           // 100=DR, 101=3倍
-  conditionId: string       // "1"=単発, "d"=毎日, "w3"=毎週
+  conditionId: string       // "1"=単発, "d"=毎日, "w1"〜"w7"=毎週（月〜日）
   storageId?: number
 }
 
@@ -483,7 +502,8 @@ export const NasneAPI = {
       ...t,
       title: cleanAribText(t.title),
       description: t.description ? cleanAribText(t.description) : t.description,
-      genre: mapGenre(t.genre as number | undefined)
+      chName: (t as any).channelName || t.chName,  // channelName を優先
+      genre: mapGenre((t as any).genre)  // 配列形式のジャンルを処理
     }))
     return { item: items, totalMatches: extractTotal(raw) }
   },
@@ -523,7 +543,7 @@ export const NasneAPI = {
       startDateTime: string   // "YYYYMMDDHHmmss"
       duration: number        // 秒
       serviceId: string
-      broadcastingType?: number // 1=地デジ, 2=BS, 3=CS
+      broadcastingType?: number // 2=地デジ, 3=BS, 4=CS
       eventId?: string
       quality?: number          // 100=DR, 101=3倍, 102=5倍
       storageId?: number        // 0=内蔵, 1=外付け
@@ -533,7 +553,7 @@ export const NasneAPI = {
       title:            params.title,
       startDateTime:    params.startDateTime,
       duration:         String(params.duration),
-      broadcastingType: String(params.broadcastingType ?? 1),
+      broadcastingType: String(params.broadcastingType ?? 2),
       serviceId:        params.serviceId,
       eventId:          params.eventId ?? '0',
       conditionId:      '1',
@@ -584,9 +604,9 @@ export const NasneAPI = {
 
     const normalizeName = (service: TvService): string | undefined => {
       return (
+        service.channelName?.trim() ||
         service.name?.trim() ||
-        service.serviceName?.trim() ||
-        service.channelName?.trim()
+        service.serviceName?.trim()
       )
     }
 
