@@ -30,6 +30,8 @@ export default function RecordingList({ nasneIp }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [groupByTitle, setGroupByTitle] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   const fetch = useCallback(async () => {
     setLoading(true)
@@ -66,6 +68,13 @@ export default function RecordingList({ nasneIp }: Props) {
       r.title.toLowerCase().includes(search.toLowerCase()) ||
       (r.chName ?? '').includes(search)
   )
+
+  const grouped = groupByTitle ? filtered.reduce((acc, rec) => {
+    const key = rec.title
+    if (!acc[key]) acc[key] = []
+    acc[key].push(rec)
+    return acc
+  }, {} as Record<string, RecordedTitle[]>) : null
 
   // ── ローディング ────────────────────────────────
   if (loading) {
@@ -107,6 +116,9 @@ export default function RecordingList({ nasneIp }: Props) {
         <h2 className="page-title">録画一覧</h2>
         <div className="header-actions">
           <span className="badge">{total} 件</span>
+          <button className="btn-icon" onClick={() => setGroupByTitle(!groupByTitle)} title={groupByTitle ? 'リスト表示' : 'グループ表示'}>
+            {groupByTitle ? '📋' : '📁'}
+          </button>
           <button className="btn-icon" onClick={fetch} title="更新">
             ↻
           </button>
@@ -134,6 +146,50 @@ export default function RecordingList({ nasneIp }: Props) {
       {filtered.length === 0 ? (
         <div className="empty-state">
           <p>{search ? '検索結果がありません' : '録画データがありません'}</p>
+        </div>
+      ) : groupByTitle ? (
+        <div className="grouped-list">
+          {Object.entries(grouped!).map(([title, recs]) => (
+            <div key={title} className="group-section">
+              <div className="group-header" onClick={() => {
+                const newExpanded = new Set(expandedGroups)
+                if (newExpanded.has(title)) {
+                  newExpanded.delete(title)
+                } else {
+                  newExpanded.add(title)
+                }
+                setExpandedGroups(newExpanded)
+              }}>
+                <h3 className="group-title">{title}</h3>
+                <span className="group-count">({recs.length}件)</span>
+                <span className="group-toggle">{expandedGroups.has(title) ? '▼' : '▶'}</span>
+              </div>
+              {expandedGroups.has(title) && (
+                <div className="group-items">
+                  {recs.map((rec) => (
+                    <div key={rec.id} className="recording-item">
+                      <div className="recording-info">
+                        <div className="recording-meta">
+                          <span className="meta-chip">{formatDateTime(rec.startDateTime)}</span>
+                          <span className="meta-chip">{formatDuration(rec.duration)}</span>
+                          {rec.chName && <span className="meta-chip">{rec.chName}</span>}
+                        </div>
+                      </div>
+                      <div className="recording-actions">
+                        <button
+                          className="btn-danger-sm"
+                          onClick={() => handleDelete(rec)}
+                          disabled={deletingId === rec.id}
+                        >
+                          {deletingId === rec.id ? '削除中…' : '削除'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       ) : (
         <div className="item-list">

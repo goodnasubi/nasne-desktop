@@ -1159,3 +1159,71 @@ select.field-input { appearance: auto; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg-elevated-2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── グループ化表示 ──────────────────────────── */
+.grouped-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.group-section {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  cursor: pointer;
+  background: var(--bg-elevated-2);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s;
+}
+
+.group-header:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.group-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+  margin: 0;
+}
+
+.group-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.group-toggle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 8px;
+}
+
+.group-items {
+  padding: 8px 0;
+}
+
+.group-items .recording-item {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 16px;
+}
+
+.group-items .recording-item:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+.group-items .recording-title {
+  display: none; /* グループヘッダーにタイトルがあるので隠す */
+}
