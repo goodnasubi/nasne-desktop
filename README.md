@@ -105,6 +105,12 @@ nasne のライブストリーミングは **DTCP-IP** (デジタル著作権管
 - **torne mobile** (iOS / Android)
 - **Video & TV SideView** (Sony 純正)
 
+## 参考
+
+- [地デジ](http://soranikakaruhashi.blog.fc2.com/blog-entry-71.html)
+- [BS](http://soranikakaruhashi.blog.fc2.com/blog-entry-36.html)
+- [デジタル放送に使用する 番組配列情報 標準規格 ARIB  STD-B10 5.3版](https://web.archive.org/web/20140427183421if_/http://www.arib.or.jp/english/html/overview/doc/2-STD-B10v5_3.pdf#page=153)
+
 ## ライセンス
 
 MIT

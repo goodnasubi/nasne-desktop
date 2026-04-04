@@ -61,6 +61,13 @@ function normalizeTitle(title: string): string {
   return normalized || title
 }
 
+// チャンネルグループのキーを生成
+function getChannelGroupKey(rec: RecordedTitle): string {
+  if (rec.chName) return rec.chName
+  if (rec.serviceId) return `serviceId:${rec.serviceId}`
+  return 'チャンネル不明'
+}
+
 // 日付からグループキーを生成
 function getDateGroupKey(dateStr: string): string {
   if (!dateStr || !/^\d{14}$/.test(dateStr)) return '不明'
@@ -80,6 +87,11 @@ function getDateGroupKey(dateStr: string): string {
   return `${year}年${month}月`
 }
 
+function normalizeServiceId(serviceId: unknown): string {
+  if (serviceId === undefined || serviceId === null) return ''
+  return String(serviceId).trim()
+}
+
 type Props = { nasneIp: string }
 
 export default function RecordingList({ nasneIp }: Props) {
@@ -91,14 +103,53 @@ export default function RecordingList({ nasneIp }: Props) {
   const [search, setSearch] = useState('')
   const [groupBy, setGroupBy] = useState<GroupByType>('none')
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [serviceNames, setServiceNames] = useState<Record<string, string>>({})
+  const [groupToggleState, setGroupToggleState] = useState<'expand' | 'collapse'>('expand')
+
+  // グループの展開/縮小をトグル
+  const handleToggleGroup = useCallback((groupKey: string) => {
+    setExpandedGroups((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(groupKey)) {
+        newSet.delete(groupKey)
+      } else {
+        newSet.add(groupKey)
+      }
+      return newSet
+    })
+  }, [])
+
+  // グループ展開/縮小のトグル切り替え
+  const handleGroupToggle = () => {
+    const newState = groupToggleState === 'expand' ? 'collapse' : 'expand'
+    setGroupToggleState(newState)
+    if (newState === 'expand' && sortedGroups && sortedGroups.length > 0) {
+      setExpandedGroups(new Set(sortedGroups.map(([key]) => key)))
+    } else if (newState === 'collapse') {
+      setExpandedGroups(new Set())
+    }
+  }
 
   const fetch = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const data = await NasneAPI.getRecordingList(nasneIp)
-      setRecordings(data?.item ?? [])
+      const recordings = data?.item ?? []
+      setRecordings(recordings)
       setTotal(data?.totalMatches ?? 0)
+
+      const newServiceNames: Record<string, string> = {}
+      recordings.forEach((rec) => {
+        const id = normalizeServiceId(rec.serviceId)
+        if (!id) return
+        if (rec.chName) {
+          newServiceNames[id] = rec.chName
+        }
+      })
+      if (Object.keys(newServiceNames).length > 0) {
+        setServiceNames((prev) => ({ ...prev, ...newServiceNames }))
+      }
     } catch (err) {
       setError(`録画一覧を取得できませんでした。\n${err}`)
     } finally {
@@ -107,6 +158,29 @@ export default function RecordingList({ nasneIp }: Props) {
   }, [nasneIp])
 
   useEffect(() => { fetch() }, [fetch])
+
+  useEffect(() => {
+    const fetchServiceNames = async () => {
+      try {
+        const services = await NasneAPI.getServiceList(nasneIp)
+        const map: Record<string, string> = {}
+        services.forEach((service) => {
+          const id = normalizeServiceId(service.serviceId)
+          if (!id) return
+          const name = service.name?.trim() || service.serviceName?.trim() || service.channelName?.trim()
+          if (name) {
+            map[id] = name
+          }
+        })
+        if (Object.keys(map).length > 0) {
+          setServiceNames((prev) => ({ ...prev, ...map }))
+        }
+      } catch {
+        // 取得に失敗した場合も、録画タイトル由来の chName を残す
+      }
+    }
+    fetchServiceNames()
+  }, [nasneIp])
 
   const handleDelete = async (rec: RecordedTitle) => {
     if (!confirm(`「${rec.title}」を削除しますか？\nこの操作は取り消せません。`)) return
@@ -121,12 +195,31 @@ export default function RecordingList({ nasneIp }: Props) {
     }
   }
 
-  const filtered = recordings.filter(
-    (r) =>
+  const normalizedSearch = search.toLowerCase()
+  const filtered = recordings.filter((r) => {
+    const serviceName = serviceNames[normalizeServiceId(r.serviceId)] ?? ''
+    return (
       !search ||
-      r.title.toLowerCase().includes(search.toLowerCase()) ||
-      (r.chName ?? '').includes(search)
-  )
+      r.title.toLowerCase().includes(normalizedSearch) ||
+      (r.chName ?? '').toLowerCase().includes(normalizedSearch) ||
+      serviceName.toLowerCase().includes(normalizedSearch)
+    )
+  })
+
+  const getChannelGroupKey = (rec: RecordedTitle): string => {
+    const serviceId = normalizeServiceId(rec.serviceId)
+    if (rec.chName) return rec.chName
+    if (serviceId && serviceNames[serviceId]) return serviceNames[serviceId]
+    if (serviceId) return `serviceId:${serviceId}`
+    return 'チャンネル不明'
+  }
+
+  const getChannelDisplayName = (rec: RecordedTitle): string | undefined => {
+    if (rec.chName) return rec.chName
+    const serviceId = normalizeServiceId(rec.serviceId)
+    if (serviceId && serviceNames[serviceId]) return serviceNames[serviceId]
+    return undefined
+  }
 
   // グルーピング処理
   const grouped = groupBy !== 'none' ? filtered.reduce((acc, rec) => {
@@ -137,7 +230,7 @@ export default function RecordingList({ nasneIp }: Props) {
         key = normalizeTitle(rec.title)
         break
       case 'channel':
-        key = rec.chName || 'チャンネル不明'
+        key = getChannelGroupKey(rec)
         break
       case 'genre':
         key = rec.genre || 'ジャンル不明'
@@ -165,14 +258,18 @@ export default function RecordingList({ nasneIp }: Props) {
     return recsA[0].title.localeCompare(recsB[0].title)
   }) : null
 
-  // グループ表示時は初期状態で全て開く
+  // グルーピングモード切り替え時に全グループを展開、トグルスイッチをリセット
   useEffect(() => {
     if (groupBy === 'none' || !grouped) {
       setExpandedGroups(new Set())
+      setGroupToggleState('expand')
       return
     }
+    // groupBy が変更されたときだけ全グループを展開
+    // grouped が変更されるたびに実行したくないので、dependency array から grouped を削除
     setExpandedGroups(new Set(Object.keys(grouped)))
-  }, [groupBy, grouped])
+    setGroupToggleState('expand')
+  }, [groupBy])
 
   // ── ローディング ────────────────────────────────
   if (loading) {
@@ -225,6 +322,7 @@ export default function RecordingList({ nasneIp }: Props) {
                 setExpandedGroups(new Set()) // グルーピング変更時に展開状態をリセット
               }}
               className="group-select"
+              aria-label="グループ化方法"
             >
               {GROUP_OPTIONS.map(option => (
                 <option key={option.value} value={option.value}>
@@ -233,6 +331,17 @@ export default function RecordingList({ nasneIp }: Props) {
               ))}
             </select>
           </div>
+
+          {/* グループ展開/縮小トグルスイッチ（グルーピング時のみ表示） */}
+          {groupBy !== 'none' && (
+            <button 
+              className={`group-toggle-switch ${groupToggleState}`}
+              onClick={handleGroupToggle}
+              title={groupToggleState === 'expand' ? 'すべてのグループを展開' : 'すべてのグループを縮小'}
+            >
+              {groupToggleState === 'expand' ? '▼' : '▶'}
+            </button>
+          )}
 
           <button className="btn-icon" onClick={fetch} title="更新">
             ↻
@@ -266,15 +375,18 @@ export default function RecordingList({ nasneIp }: Props) {
         <div className="grouped-list">
           {sortedGroups!.map(([groupKey, recs]) => (
             <div key={groupKey} className="group-section">
-              <div className="group-header" onClick={() => {
-                const newExpanded = new Set(expandedGroups)
-                if (newExpanded.has(groupKey)) {
-                  newExpanded.delete(groupKey)
-                } else {
-                  newExpanded.add(groupKey)
-                }
-                setExpandedGroups(newExpanded)
-              }}>
+              <div 
+                className="group-header" 
+                onClick={() => handleToggleGroup(groupKey)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleToggleGroup(groupKey)
+                  }
+                }}
+              >
                 <h3 className="group-title">{groupKey}</h3>
                 <span className="group-count">({recs.length}件)</span>
                 <span className="group-toggle">{expandedGroups.has(groupKey) ? '▼' : '▶'}</span>
@@ -288,7 +400,7 @@ export default function RecordingList({ nasneIp }: Props) {
                         <div className="recording-meta">
                           <span className="meta-chip">{formatDateTime(rec.startDateTime)}</span>
                           <span className="meta-chip">{formatDuration(rec.duration)}</span>
-                          {rec.chName && groupBy !== 'channel' && <span className="meta-chip">{rec.chName}</span>}
+                          {getChannelDisplayName(rec) && groupBy !== 'channel' && <span className="meta-chip">{getChannelDisplayName(rec)}</span>}
                           {rec.genre && groupBy !== 'genre' && <span className="meta-chip">{rec.genre}</span>}
                         </div>
                       </div>
@@ -317,7 +429,7 @@ export default function RecordingList({ nasneIp }: Props) {
                 <div className="recording-meta">
                   <span className="meta-chip">{formatDateTime(rec.startDateTime)}</span>
                   <span className="meta-chip">{formatDuration(rec.duration)}</span>
-                  {rec.chName && <span className="meta-chip">{rec.chName}</span>}
+                  {getChannelDisplayName(rec) && <span className="meta-chip">{getChannelDisplayName(rec)}</span>}
                   {rec.genre && <span className="meta-chip">{rec.genre}</span>}
                 </div>
               </div>

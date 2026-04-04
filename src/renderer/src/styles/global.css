@@ -215,6 +215,63 @@ body {
   border-color: var(--border-focus);
 }
 
+/* グループ展開/縮小トグルスイッチ */
+.group-toggle-switch {
+  width: 40px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 24px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.group-toggle-switch:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(10, 132, 255, 0.06);
+}
+
+.group-toggle-switch.expand {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #22c55e;
+}
+
+.group-toggle-switch.expand:hover {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: #22c55e;
+}
+
+.group-toggle-switch.collapse {
+  background: rgba(168, 85, 247, 0.06);
+  border-color: rgba(168, 85, 247, 0.4);
+  color: #a855f7;
+}
+
+.group-toggle-switch.collapse:hover {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: #a855f7;
+}
+
+.group-toggle-switch:active {
+  transform: scale(0.95);
+}
+
+.group-toggle-switch:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 /* ── バッジ ────────────────────────────────────── */
 .badge {
   font-size: 11px;
@@ -1202,6 +1259,7 @@ select.field-input { appearance: auto; }
   overflow: hidden;
 }
 
+/* グループヘッダー - クリック可能 */
 .group-header {
   display: flex;
   align-items: center;
@@ -1210,11 +1268,26 @@ select.field-input { appearance: auto; }
   cursor: pointer;
   background: var(--bg-elevated-2);
   border-bottom: 1px solid var(--border);
-  transition: background 0.12s;
+  transition: background 0.15s ease, color 0.15s ease;
+  user-select: none;
+  pointer-events: auto;
+  border: none;
+  outline: none;
 }
 
+/* ホバー時の強調表示 */
 .group-header:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(10, 132, 255, 0.08);
+  border-bottom-color: rgba(10, 132, 255, 0.3);
+}
+
+.group-header:active {
+  background: rgba(10, 132, 255, 0.12);
+}
+
+.group-header:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .group-title {
@@ -1223,22 +1296,60 @@ select.field-input { appearance: auto; }
   color: var(--text-primary);
   flex: 1;
   margin: 0;
+  transition: color 0.15s ease;
+}
+
+.group-header:hover .group-title {
+  color: var(--accent);
 }
 
 .group-count {
   font-size: 12px;
   color: var(--text-muted);
   margin-left: 8px;
+  transition: color 0.15s ease;
 }
 
+.group-header:hover .group-count {
+  color: var(--text-secondary);
+}
+
+/* 展開/縮小矢印 - アニメーション付き */
 .group-toggle {
   font-size: 12px;
   color: var(--text-secondary);
   margin-left: 8px;
+  display: inline-block;
+  transition: transform 0.2s ease, color 0.15s ease;
+  will-change: transform;
+}
+
+.group-header:hover .group-toggle {
+  color: var(--accent);
+}
+
+/* 矢印のアニメーション効果を JSX から制御する場合のための記述 */
+.group-header[data-expanded="false"] .group-toggle {
+  transform: rotate(0deg);
+}
+.group-header[data-expanded="true"] .group-toggle {
+  transform: rotate(0deg);  /* JSX 側でアニメーション制御 */
 }
 
 .group-items {
   padding: 8px 0;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .group-items .recording-item {
@@ -1246,6 +1357,11 @@ select.field-input { appearance: auto; }
   border-radius: 0;
   background: transparent;
   padding: 8px 16px;
+  transition: background 0.12s ease;
+}
+
+.group-items .recording-item:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .group-items .recording-item:hover {
