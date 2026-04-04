@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { NasneAPI, type RecordedTitle } from '../api/nasne'
+import { getChannelChipStyle, getGenreChipStyle } from '../utils/chipColors'
 
 // nasne の日時フォーマット "YYYYMMDDHHmmss" → "YYYY/MM/DD HH:mm"
 function formatDateTime(dt: string): string {
@@ -438,10 +439,10 @@ export default function RecordingList({ nasneIp }: Props) {
                       <div className="recording-info">
                         <div className="recording-title">{rec.title}</div>
                         <div className="recording-meta">
-                          <span className="meta-chip">{formatDateTime(rec.startDateTime)}</span>
-                          <span className="meta-chip">{formatDuration(rec.duration)}</span>
-                          {getChannelDisplayName(rec) && groupBy !== 'channel' && <span className="meta-chip">{getChannelDisplayName(rec)}</span>}
-                          {rec.genres && rec.genres.length > 0 && groupBy !== 'genre' && rec.genres.map((g, i) => <span key={`${g}-${i}`} className="meta-chip">{g}</span>)}
+                          <span className="meta-chip meta-chip--time">{formatDateTime(rec.startDateTime)}</span>
+                          <span className="meta-chip meta-chip--duration">{formatDuration(rec.duration)}</span>
+                          {getChannelDisplayName(rec) && groupBy !== 'channel' && <span className="meta-chip" style={getChannelChipStyle(getChannelDisplayName(rec)!)}>{getChannelDisplayName(rec)}</span>}
+                          {rec.genres && rec.genres.length > 0 && groupBy !== 'genre' && rec.genres.map((g, i) => <span key={`${g}-${i}`} className="meta-chip" style={getGenreChipStyle(g)}>{g}</span>)}
                         </div>
                       </div>
                       <div className="recording-actions">
@@ -467,10 +468,10 @@ export default function RecordingList({ nasneIp }: Props) {
               <div className="recording-info">
                 <div className="recording-title">{rec.title}</div>
                 <div className="recording-meta">
-                  <span className="meta-chip">{formatDateTime(rec.startDateTime)}</span>
-                  <span className="meta-chip">{formatDuration(rec.duration)}</span>
-                  {getChannelDisplayName(rec) && <span className="meta-chip">{getChannelDisplayName(rec)}</span>}
-                  {rec.genres && rec.genres.length > 0 && rec.genres.map((g, i) => <span key={`${g}-${i}`} className="meta-chip">{g}</span>)}
+                  <span className="meta-chip meta-chip--time">{formatDateTime(rec.startDateTime)}</span>
+                  <span className="meta-chip meta-chip--duration">{formatDuration(rec.duration)}</span>
+                  {getChannelDisplayName(rec) && <span className="meta-chip" style={getChannelChipStyle(getChannelDisplayName(rec)!)}>{getChannelDisplayName(rec)}</span>}
+                  {rec.genres && rec.genres.length > 0 && rec.genres.map((g, i) => <span key={`${g}-${i}`} className="meta-chip" style={getGenreChipStyle(g)}>{g}</span>)}
                 </div>
               </div>
               <div className="recording-actions">

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { NasneAPI, type Reservation } from '../api/nasne'
+import { getChannelChipStyle } from '../utils/chipColors'
 
 function formatDateTime(dt: string): string {
   if (!dt) return '—'
@@ -270,7 +271,7 @@ export default function ReservationList({ nasneIp }: Props) {
                 <div className="recording-meta">
                   <span className="meta-chip">{formatDateTime(res.startDateTime)}</span>
                   <span className="meta-chip">{formatDuration(res.duration)}</span>
-                  {res.chName && <span className="meta-chip">{res.chName}</span>}
+                  {res.chName && <span className="meta-chip" style={getChannelChipStyle(res.chName)}>{res.chName}</span>}
                   <span className="meta-chip meta-chip--quality">{qualityLabel(res.quality)}</span>
                   <span className="meta-chip">{conditionLabel(res.conditionId)}</span>
                 </div>

@@ -487,6 +487,12 @@ body {
   background: rgba(10, 132, 255, 0.1);
 }
 
+.meta-chip--time,
+.meta-chip--duration {
+  font-size: 12px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.75));
+}
+
 .recording-actions { flex-shrink: 0; }
 
 /* ── 状態表示 (ロード / エラー / 空) ──────────── */
