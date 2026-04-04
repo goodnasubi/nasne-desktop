@@ -37,35 +37,53 @@ const GROUP_OPTIONS: { value: GroupByType; label: string; icon: string }[] = [
 function normalizeTitle(title: string): string {
   let normalized = title.trim()
 
-  // 先頭の [新] などの放送タグを削除
+  // 1. 先頭の放送タグを削除 ([新], [字] など)
   normalized = normalized.replace(/^[\s\u3000]*(?:\[新\]|\[終\]|\[字\]|\[再\]|\[デ\]|\[解\]|\[SS\]|\[PR\]|\[他\]|【新】|【終】|【字】|【再】|【デ】|【解】|【SS】|【PR】|【他】)\s*/u, '').trim()
 
-  // 先頭の番組名を括弧から抽出
+  // 2. 全角英数字を半角に正規化 (Season, #13, 第4話 などの正規表現マッチのため)
+  normalized = normalized.replace(/[Ａ-Ｚａ-ｚ０-９]/gu, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+
+  // 3. 先頭が 『...』/【...】/[...] の場合はその内容がシリーズ名
   const bracketMatch = normalized.match(/^[\s\u3000]*[『【\[]([^』】\]]+)[』】\]]/u)
   if (bracketMatch) {
-    normalized = bracketMatch[1].trim()
-    if (normalized) return normalized
+    return bracketMatch[1].trim() || title
   }
 
+  // 4. 不要情報の除去
   normalized = normalized
+    .replace(/^[<＜][^>＞]+[>＞][\s\u3000]*/u, '')       // 先頭の放送ブロック名 <ノイタミナ> を除去
+    .replace(/[\s\u3000]*Season\s*\d+.*$/iu, '')          // Season N / Season3放送記念特番...
     .replace(/[\s\u3000]*★.*$/u, '')
-    .replace(/[\s\u3000]*＃.*$/u, '')
-    .replace(/[\s\u3000]*#.*$/u, '')
-    .replace(/[\s\u3000]*第\s*\d+話.*$/u, '')
+    .replace(/[\s\u3000]*[＃#\u266F].*$/u, '')             // ＃13 / #13 / ♯13（音楽シャープ記号）
+    .replace(/[\s\u3000]*「第[^話]*話[^」]*」.*$/u, '')    // 「第N話 タイトル」（先に処理: 「」ごと除去）
+    .replace(/[\s\u3000]*第\s*\d+話.*$/u, '')              // 第4話（「」なしの場合）
     .replace(/[\s\u3000]*\d+話.*$/u, '')
     .replace(/[\s\u3000]*\(\s*\d+\s*\)[\s\u3000]*$/u, '')
     .replace(/[\s\u3000]*\d+\/\d+[\s\u3000]*$/u, '')
+    .replace(/[\s\u3000]*\d+月\d+日.*$/u, '')           // 4月3日（ニュース番組の日付）
+    .replace(/[\s\u3000]*▽.*$/u, '')                    // ▽トピック名（NHKニュース形式）
+    .replace(/((?:19|20)\d{2})[\s\u3000]+\S.*$/u, '$1') // 「番組名2023　エピソード」→「番組名2023」
     .replace(/[\s\u3000]*\[.*?\]$/u, '')
+    .replace(/[\s\u3000]*[<＜][^>＞]+[>＞][\s\u3000]*$/u, '') // 末尾の放送局情報 ＜フジテレビから...＞ を除去
     .trim()
 
-  return normalized || title
-}
+  // 5. 「エピソード名」パターン: 前の部分が3文字以上ならシリーズ名として使用
+  // 例: 葬送のフリーレン「ヒンメルの自伝」→ 葬送のフリーレン
+  //     境界戦機「第二十四話...」→ 境界戦機（4文字でも対象）
+  const kIdx = normalized.search(/「[^」]+」/u)
+  if (kIdx >= 3) {
+    normalized = normalized.slice(0, kIdx).trim()
+  }
 
-// チャンネルグループのキーを生成
-function getChannelGroupKey(rec: RecordedTitle): string {
-  if (rec.chName) return rec.chName
-  if (rec.serviceId) return `serviceId:${rec.serviceId}`
-  return 'チャンネル不明'
+  // 6. 中間の【エピソード名】を除去
+  // 例: 上田と女DEEP【生理の歴史】／機動戦士Gundam X → 上田と女DEEP／機動戦士Gundam X
+  normalized = normalized.replace(/【[^】]*】/gu, '').trim()
+
+  // 7. 末尾の英大文字ブロック（放送枠名）を除去
+  // 例: 薬屋のひとりごと FRIDAY ANIME NIGHT → 薬屋のひとりごと
+  normalized = normalized.replace(/[\s\u3000]+[A-Z]{2,}(?:[\s\u3000]+[A-Z]{2,})*[\s\u3000]*$/u, '').trim()
+
+  return normalized || title
 }
 
 // 日付からグループキーを生成
@@ -115,6 +133,7 @@ export default function RecordingList({ nasneIp }: Props) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [serviceNames, setServiceNames] = useState<Record<string, string>>({})
   const [groupToggleState, setGroupToggleState] = useState<'expand' | 'collapse'>('expand')
+  const [onlyNew, setOnlyNew] = useState(false)
 
   // グループの展開/縮小をトグル
   const handleToggleGroup = useCallback((groupKey: string) => {
@@ -207,6 +226,7 @@ export default function RecordingList({ nasneIp }: Props) {
 
   const normalizedSearch = search.toLowerCase()
   const filtered = recordings.filter((r) => {
+    if (onlyNew && r.newFlag !== 1) return false
     const serviceName = serviceNames[normalizeServiceId(r.serviceId)] ?? ''
     return (
       !search ||
@@ -316,7 +336,8 @@ export default function RecordingList({ nasneIp }: Props) {
 
   return (
     <div className="page">
-      {/* ヘッダー */}
+      {/* ヘッダー（スクロール固定） */}
+      <div className="sticky-header">
       <div className="page-header">
         <h2 className="page-title">録画一覧</h2>
         <div className="header-actions">
@@ -374,12 +395,21 @@ export default function RecordingList({ nasneIp }: Props) {
             ✕
           </button>
         )}
+        <button
+          type="button"
+          className={`filter-new-btn ${onlyNew ? 'filter-new-btn--active' : ''}`}
+          onClick={() => setOnlyNew((v) => !v)}
+          title="新番組のみ表示"
+        >
+          新番組
+        </button>
       </div>
+      </div>{/* /sticky-header */}
 
       {/* リスト */}
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <p>{search ? '検索結果がありません' : '録画データがありません'}</p>
+          <p>{search || onlyNew ? '検索結果がありません' : '録画データがありません'}</p>
         </div>
       ) : groupBy !== 'none' ? (
         <div className="grouped-list">

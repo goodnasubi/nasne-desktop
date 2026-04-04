@@ -372,6 +372,17 @@ body {
 
 .btn-full { width: 100%; }
 
+/* ── スティッキーヘッダー ──────────────────────── */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  /* .page の padding を打ち消して端まで広げる */
+  margin: -24px -28px 0;
+  padding: 24px 28px 12px;
+}
+
 /* ── 検索バー ──────────────────────────────────── */
 .search-bar {
   display: flex;
@@ -381,7 +392,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 6px 12px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .search-icon { font-size: 14px; color: var(--text-muted); }
@@ -406,6 +417,24 @@ body {
   padding: 2px 4px;
 }
 .search-clear:hover { color: var(--text-secondary); }
+
+.filter-new-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.filter-new-btn:hover { border-color: var(--accent); color: var(--accent); }
+.filter-new-btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 
 /* ── アイテムリスト (録画 / 予約共通) ─────────── */
 .item-list {

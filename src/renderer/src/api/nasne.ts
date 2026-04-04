@@ -234,6 +234,7 @@ export type RecordedTitle = {
   contentUrl?: string     // 再生 URL (DLNA)
   genre?: string          // ジャンル名（マッピング済み）
   description?: string
+  newFlag?: number        // 1=新番組
 }
 
 export type Reservation = {
@@ -498,12 +499,20 @@ export const NasneAPI = {
         withUserData: '0'
       })
     const raw = await req<unknown>(ip, REMOTE_PORT, path)
-    const items = extractItems<RecordedTitle>(raw).map((t) => ({
+    const rawItems = extractItems<RecordedTitle>(raw)
+    // DEBUG: newFlag の値を確認（最初の10件）
+    console.log('[DEBUG] newFlag samples:', rawItems.slice(0, 10).map((t) => ({
+      title: (t as any).title?.slice(0, 20),
+      newFlag: (t as any).newFlag,
+      newFlagType: typeof (t as any).newFlag
+    })))
+    const items = rawItems.map((t) => ({
       ...t,
       title: cleanAribText(t.title),
       description: t.description ? cleanAribText(t.description) : t.description,
       chName: (t as any).channelName || t.chName,  // channelName を優先
-      genre: mapGenre((t as any).genre)  // 配列形式のジャンルを処理
+      genre: mapGenre((t as any).genre),  // 配列形式のジャンルを処理
+      newFlag: Number((t as any).newFlag) || 0  // 文字列 "1"/"0" を数値に正規化
     }))
     return { item: items, totalMatches: extractTotal(raw) }
   },
