@@ -300,6 +300,14 @@ export type RecordedTitle = {
   genres?: string[]       // ジャンル名一覧（マッピング済み）
   description?: string
   newFlag?: number        // nasne API から返されるフラグ（常に1のため新番組判定には使用しない）
+  playCount?: number
+  resumePosition?: number
+  captionInfo?: number    // 1=字幕あり, 0=なし
+  protectFlag?: number    // 0=なし, 1=プロテクト
+  recordingFlag?: number  // 0=録画済み, 1=録画中
+  copyCount?: number
+  copyControl?: number
+  containerSize?: { main: number; mobile?: number; thumb?: number }
 }
 
 export type Reservation = {
@@ -569,7 +577,15 @@ export const NasneAPI = {
       title: cleanAribText(t.title),
       description: t.description ? cleanAribText(t.description) : t.description,
       chName: (t as any).channelName || t.chName,  // channelName を優先
-      genres: mapGenres((t as any).genre)  // 配列形式のジャンルを処理
+      genres: mapGenres((t as any).genre),  // 配列形式のジャンルを処理
+      playCount: (t as any).playCount ?? 0,
+      resumePosition: (t as any).resumePosition ?? 0,
+      captionInfo: (t as any).captionInfo ?? 0,
+      protectFlag: (t as any).protectFlag ?? 0,
+      recordingFlag: (t as any).recordingFlag ?? 0,
+      copyCount: (t as any).copyCount,
+      copyControl: (t as any).copyControl,
+      containerSize: (t as any).containerSize,
     }))
     return { item: items, totalMatches: extractTotal(raw) }
   },

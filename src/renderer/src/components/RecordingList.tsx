@@ -22,6 +22,22 @@ function formatDuration(sec: number): string {
   return h > 0 ? `${h}時間${m}分` : `${m}分`
 }
 
+function formatFileSize(bytes: number): string {
+  if (!bytes) return '—'
+  const gb = bytes / (1024 * 1024 * 1024)
+  return gb >= 1 ? `${gb.toFixed(1)} GB` : `${(bytes / (1024 * 1024)).toFixed(0)} MB`
+}
+
+function getWatchStatus(rec: RecordedTitle): { label: string; className: string } {
+  if ((rec.playCount ?? 0) > 0 && (rec.resumePosition ?? 0) === 0) {
+    return { label: '視聴済', className: 'status-watched' }
+  }
+  if ((rec.resumePosition ?? 0) > 0) {
+    return { label: '視聴中', className: 'status-watching' }
+  }
+  return { label: '未視聴', className: 'status-unwatched' }
+}
+
 // グルーピングタイプ
 type GroupByType = 'none' | 'title' | 'channel' | 'genre' | 'date'
 
@@ -135,6 +151,7 @@ export default function RecordingList({ nasneIp }: Props) {
   const [serviceNames, setServiceNames] = useState<Record<string, string>>({})
   const [groupToggleState, setGroupToggleState] = useState<'expand' | 'collapse'>('expand')
   const [onlyNew, setOnlyNew] = useState(false)
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set())
 
   // グループの展開/縮小をトグル
   const handleToggleGroup = useCallback((groupKey: string) => {
@@ -302,6 +319,78 @@ export default function RecordingList({ nasneIp }: Props) {
     setGroupToggleState('expand')
   }, [groupBy])
 
+  // ── 録画アイテムの描画（DRY化） ─────────────────────
+  const renderRecordingItem = (rec: RecordedTitle) => {
+    const watchStatus = getWatchStatus(rec)
+    const isDescExpanded = expandedDescriptions.has(rec.id)
+    const toggleDesc = () => {
+      setExpandedDescriptions((prev) => {
+        const next = new Set(prev)
+        if (next.has(rec.id)) {
+          next.delete(rec.id)
+        } else {
+          next.add(rec.id)
+        }
+        return next
+      })
+    }
+    const chName = getChannelDisplayName(rec)
+    return (
+      <div key={rec.id} className="recording-item">
+        <div className="recording-info">
+          <div
+            className={`recording-title${rec.description ? ' recording-title--expandable' : ''}`}
+            onClick={rec.description ? toggleDesc : undefined}
+          >
+            {rec.recordingFlag === 1 && (
+              <span className="meta-chip meta-chip--recording" title="現在録画中">⏺ 録画中</span>
+            )}{' '}
+            {rec.title}
+            {rec.description && (
+              <span className="desc-toggle">{isDescExpanded ? '▲' : '▼'}</span>
+            )}
+          </div>
+          {isDescExpanded && rec.description && (
+            <div className="recording-description">{rec.description}</div>
+          )}
+          <div className="recording-meta">
+            <span className={`meta-chip ${watchStatus.className}`} title={`視聴状況: ${watchStatus.label}（再生回数: ${rec.playCount ?? 0}回）`}>{watchStatus.label}</span>
+            <span className="meta-chip meta-chip--time" title={`放送開始日時: ${formatDateTime(rec.startDateTime)}`}>{formatDateTime(rec.startDateTime)}</span>
+            <span className="meta-chip meta-chip--duration" title={`録画時間: ${formatDuration(rec.duration)}（${rec.duration}秒）`}>{formatDuration(rec.duration)}</span>
+            {chName && groupBy !== 'channel' && (
+              <span className="meta-chip" style={getChannelChipStyle(chName)} title={`チャンネル: ${chName}`}>{chName}</span>
+            )}
+            {rec.genres && rec.genres.length > 0 && groupBy !== 'genre' && rec.genres.map((g, i) => (
+              <span key={`${g}-${i}`} className="meta-chip" style={getGenreChipStyle(g)} title={`ジャンル: ${g}`}>{g}</span>
+            ))}
+            {rec.captionInfo === 1 && (
+              <span className="meta-chip meta-chip--caption" title="字幕放送あり">字</span>
+            )}
+            {rec.containerSize?.main ? (
+              <span className="meta-chip meta-chip--size" title={`ファイルサイズ: ${formatFileSize(rec.containerSize.main)}（${rec.containerSize.main.toLocaleString()} バイト）`}>{formatFileSize(rec.containerSize.main)}</span>
+            ) : null}
+            {rec.copyCount !== undefined && (
+              <span className="meta-chip meta-chip--copy" title={`コピー可能回数: ${rec.copyCount}回（コピー制御: ${rec.copyControl === 1 ? 'コピーワンス' : rec.copyControl === 0 ? 'コピーフリー' : `制御値${rec.copyControl}`}）`}>📋{rec.copyCount}</span>
+            )}
+            {rec.protectFlag === 1 && (
+              <span className="meta-chip meta-chip--protect" title="プロテクト設定済み（削除不可）">🔒</span>
+            )}
+          </div>
+        </div>
+        <div className="recording-actions">
+          <button
+            type="button"
+            className="btn-danger-sm"
+            onClick={() => handleDelete(rec)}
+            disabled={deletingId === rec.id}
+          >
+            {deletingId === rec.id ? '削除中…' : '削除'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   // ── ローディング ────────────────────────────────
   if (loading) {
     return (
@@ -434,28 +523,7 @@ export default function RecordingList({ nasneIp }: Props) {
               </div>
               {expandedGroups.has(groupKey) && (
                 <div className="group-items">
-                  {recs.map((rec) => (
-                    <div key={rec.id} className="recording-item">
-                      <div className="recording-info">
-                        <div className="recording-title">{rec.title}</div>
-                        <div className="recording-meta">
-                          <span className="meta-chip meta-chip--time">{formatDateTime(rec.startDateTime)}</span>
-                          <span className="meta-chip meta-chip--duration">{formatDuration(rec.duration)}</span>
-                          {getChannelDisplayName(rec) && groupBy !== 'channel' && <span className="meta-chip" style={getChannelChipStyle(getChannelDisplayName(rec)!)}>{getChannelDisplayName(rec)}</span>}
-                          {rec.genres && rec.genres.length > 0 && groupBy !== 'genre' && rec.genres.map((g, i) => <span key={`${g}-${i}`} className="meta-chip" style={getGenreChipStyle(g)}>{g}</span>)}
-                        </div>
-                      </div>
-                      <div className="recording-actions">
-                        <button
-                          className="btn-danger-sm"
-                          onClick={() => handleDelete(rec)}
-                          disabled={deletingId === rec.id}
-                        >
-                          {deletingId === rec.id ? '削除中…' : '削除'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  {recs.map((rec) => renderRecordingItem(rec))}
                 </div>
               )}
             </div>
@@ -463,28 +531,7 @@ export default function RecordingList({ nasneIp }: Props) {
         </div>
       ) : (
         <div className="item-list">
-          {filtered.map((rec) => (
-            <div key={rec.id} className="recording-item">
-              <div className="recording-info">
-                <div className="recording-title">{rec.title}</div>
-                <div className="recording-meta">
-                  <span className="meta-chip meta-chip--time">{formatDateTime(rec.startDateTime)}</span>
-                  <span className="meta-chip meta-chip--duration">{formatDuration(rec.duration)}</span>
-                  {getChannelDisplayName(rec) && <span className="meta-chip" style={getChannelChipStyle(getChannelDisplayName(rec)!)}>{getChannelDisplayName(rec)}</span>}
-                  {rec.genres && rec.genres.length > 0 && rec.genres.map((g, i) => <span key={`${g}-${i}`} className="meta-chip" style={getGenreChipStyle(g)}>{g}</span>)}
-                </div>
-              </div>
-              <div className="recording-actions">
-                <button
-                  className="btn-danger-sm"
-                  onClick={() => handleDelete(rec)}
-                  disabled={deletingId === rec.id}
-                >
-                  {deletingId === rec.id ? '削除中…' : '削除'}
-                </button>
-              </div>
-            </div>
-          ))}
+          {filtered.map((rec) => renderRecordingItem(rec))}
         </div>
       )}
     </div>
