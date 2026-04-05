@@ -2063,3 +2063,234 @@ select.field-input { appearance: auto; }
   }
 }
 
+/* ─────────────────────────────────────────────
+   垂直レイアウト (TopBar + コンテンツ)
+   ───────────────────────────────────────────── */
+.app-layout-vertical {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── ホーム画面 ───────────────────────────────── */
+.home-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  padding: 0;
+}
+
+.home-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: rgba(8, 32, 60, 0.95);
+  border-bottom: 1px solid rgba(144, 211, 255, 0.2);
+}
+
+.home-app-name {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #1de0ff;
+}
+
+.home-nasne-name {
+  font-size: 13px;
+  color: var(--text-muted, #aaa);
+}
+
+.home-header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.home-clock {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-settings-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.2s;
+}
+.home-settings-btn:hover { color: #fff; }
+
+/* タイルグリッド */
+.home-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  padding: 48px;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.home-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 160px;
+  background: linear-gradient(135deg, rgba(12, 48, 78, 0.95), rgba(8, 32, 56, 0.95));
+  border: 1px solid rgba(144, 211, 255, 0.25);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  color: #fff;
+}
+.home-tile:hover {
+  transform: scale(1.03);
+  border-color: rgba(29, 224, 255, 0.7);
+  box-shadow: 0 0 28px rgba(29, 224, 255, 0.18);
+}
+.home-tile:active {
+  transform: scale(0.97);
+}
+
+.home-tile-icon {
+  font-size: 36px;
+  line-height: 1;
+}
+.home-tile-label {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.home-tile-sublabel {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  letter-spacing: 0.05em;
+}
+
+/* ── トップバー ───────────────────────────────── */
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: rgba(8, 32, 60, 0.97);
+  border-bottom: 1px solid rgba(144, 211, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.top-bar-back {
+  background: none;
+  border: 1px solid rgba(144, 211, 255, 0.3);
+  color: #aad4f5;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.top-bar-back:hover {
+  background: rgba(144, 211, 255, 0.12);
+  color: #fff;
+}
+
+.top-bar-section {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.top-bar-label {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #fff;
+}
+.top-bar-sublabel {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+}
+
+.top-bar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.top-bar-nasne-name {
+  font-size: 13px;
+  color: #aaa;
+}
+
+/* nasne タブ切り替え */
+.top-bar-nasne-tabs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.nasne-tab {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(144, 211, 255, 0.2);
+  color: #8ab4d4;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+  letter-spacing: 0.04em;
+}
+.nasne-tab:hover {
+  background: rgba(144, 211, 255, 0.12);
+  color: #fff;
+  border-color: rgba(144, 211, 255, 0.5);
+}
+.nasne-tab--active {
+  background: linear-gradient(135deg, #c8a84b, #a07830);
+  border-color: #c8a84b;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(200, 168, 75, 0.4);
+}
+
+.top-bar-clock {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-bar-settings {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.2s;
+}
+.top-bar-settings:hover { color: #fff; }
+
+/* レスポンシブ */
+@media (max-width: 980px) {
+  .home-tiles { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .home-tiles { grid-template-columns: 1fr; padding: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-tile { transition: none; }
+}
+

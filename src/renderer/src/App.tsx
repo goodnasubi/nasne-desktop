@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import Sidebar from './components/Sidebar'
+import { useEffect, useState } from 'react'
+import HomeScreen from './components/HomeScreen'
+import TopBar from './components/TopBar'
 import RecordingList from './components/RecordingList'
 import ReservationList from './components/ReservationList'
 import StorageInfo from './components/StorageInfo'
@@ -10,18 +11,18 @@ import EpgView from './components/EpgView'
 import { NHK_AREAS } from './api/nhk'
 import { NasneAPI } from './api/nasne'
 
-export type Tab = 'recordings' | 'reservations' | 'search' | 'epg' | 'storage' | 'live' | 'debug'
+export type Tab = 'home' | 'recordings' | 'reservations' | 'search' | 'epg' | 'storage' | 'live' | 'debug'
 
 type NasneView = 'all' | string
 
-const TAB_META: Record<Tab, { label: string; icon: string }> = {
-  recordings: { label: '録画一覧', icon: '🎬' },
-  reservations: { label: '録画予約', icon: '📅' },
-  search: { label: '予約追加', icon: '➕' },
-  epg: { label: '番組表', icon: '📺' },
-  storage: { label: 'ストレージ', icon: '💾' },
-  live: { label: 'ライブ視聴', icon: '📡' },
-  debug: { label: '接続テスト', icon: '🔧' }
+const sectionMap: Record<string, { label: string; sublabel: string }> = {
+  recordings:   { label: 'VIDEO',   sublabel: 'ビデオ' },
+  reservations: { label: 'RESERVE', sublabel: '予約' },
+  epg:          { label: 'GUIDE',   sublabel: '番組表' },
+  search:       { label: 'SEARCH',  sublabel: '検索' },
+  live:         { label: 'LIVE',    sublabel: 'ライブ' },
+  storage:      { label: 'STORAGE', sublabel: 'ストレージ' },
+  debug:        { label: 'DEBUG',   sublabel: 'テスト' },
 }
 
 const MERGE_SUPPORTED_TABS: Tab[] = ['recordings', 'reservations', 'storage']
@@ -164,18 +165,12 @@ function SetupScreen({ onSave, currentIps, currentNhkApiKey, currentNhkArea }: S
 
 export default function App() {
   const [nasneIps, setNasneIps]     = useState<string[]>(() => getStoredNasneIps())
-  const [nasneView, setNasneView]   = useState<NasneView>(() => localStorage.getItem('nasneView') ?? 'all')
+  const [nasneView, setNasneView]   = useState<NasneView>('all')
   const [nhkApiKey, setNhkApiKey]   = useState(() => localStorage.getItem('nhkApiKey') ?? '')
   const [nhkArea, setNhkArea]       = useState(() => localStorage.getItem('nhkArea') ?? '120')
   const [showSetup, setShowSetup]   = useState(() => getStoredNasneIps().length === 0)
-  const [activeTab, setActiveTab]   = useState<Tab>('recordings')
-  const [now, setNow]               = useState(() => new Date())
+  const [activeTab, setActiveTab]   = useState<Tab>('home')
   const [boxNames, setBoxNames]     = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 1000 * 30)
-    return () => window.clearInterval(timer)
-  }, [])
 
   // nasne ボックス名をフェッチ（IP → 名前のマッピング）
   useEffect(() => {
@@ -205,16 +200,6 @@ export default function App() {
       setNasneView('all')
     }
   }, [nasneIps, nasneView])
-
-  const currentTime = useMemo(
-    () => now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
-    [now]
-  )
-
-  const currentDate = useMemo(
-    () => now.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' }),
-    [now]
-  )
 
   const primaryNasneIp = nasneIps[0] ?? ''
   const mergeSupported = MERGE_SUPPORTED_TABS.includes(activeTab)
@@ -252,97 +237,63 @@ export default function App() {
     )
   }
 
-  const getBoxLabel = (ip: string) => boxNames[ip] || ip
+  if (activeTab === 'home') {
+    return (
+      <HomeScreen
+        nasneIps={nasneIps}
+        boxNames={boxNames}
+        onNavigate={setActiveTab}
+        onOpenSettings={() => setShowSetup(true)}
+      />
+    )
+  }
 
-  const sidebarLabel = effectiveView === 'all'
-    ? `all (${nasneIps.length})`
-    : (getBoxLabel(targetNasneIp) || primaryNasneIp)
+  const section = sectionMap[activeTab] ?? { label: activeTab.toUpperCase(), sublabel: '' }
 
   return (
-    <div className="app-layout">
-      <Sidebar
-        activeTab={activeTab}
-        nasneIp={sidebarLabel}
-        onTabChange={setActiveTab}
-        onSettingsClick={() => setShowSetup(true)}
+    <div className="app-layout-vertical">
+      <TopBar
+        sectionLabel={section.label}
+        sectionSublabel={section.sublabel}
+        nasneIps={nasneIps}
+        boxNames={boxNames}
+        nasneView={nasneView}
+        onNasneChange={handleChangeNasneView}
+        onHome={() => setActiveTab('home')}
+        onOpenSettings={() => setShowSetup(true)}
       />
 
-      <section className="torne-stage">
-        <header className="torne-hub-bar">
-          <div className="torne-hub-now">
-            <span className="torne-hub-icon">{TAB_META[activeTab].icon}</span>
-            <div className="torne-hub-meta">
-              <span className="torne-hub-label">{TAB_META[activeTab].label}</span>
-              <span className="torne-hub-sub">
-                {effectiveView === 'all' ? `nasne / すべて (${nasneIps.length}台)` : `nasne / ${getBoxLabel(targetNasneIp)}`}
-              </span>
-            </div>
-          </div>
-
-          <div className="torne-channel-strip" role="tablist" aria-label="クイック切り替え">
-            {(['recordings', 'reservations', 'epg', 'live'] as Tab[]).map((tab) => (
-              <button
-                key={tab}
-                className={`torne-channel-chip ${activeTab === tab ? 'torne-channel-chip--active' : ''}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                <span>{TAB_META[tab].icon}</span>
-                <span>{TAB_META[tab].label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="torne-hub-clock">
-            <label className="nasne-target-label" htmlFor="nasne-target">表示対象</label>
-            <select
-              id="nasne-target"
-              className="nasne-target-select"
-              value={nasneView === 'all' && mergeSupported ? 'all' : (nasneView === 'all' ? primaryNasneIp : nasneView)}
-              onChange={(e) => handleChangeNasneView(e.target.value)}
-            >
-              {mergeSupported && <option value="all">すべて (マージ表示)</option>}
-              {nasneIps.map((ip) => (
-                <option key={ip} value={ip}>{getBoxLabel(ip)}</option>
-              ))}
-            </select>
-            <div className="torne-hub-date">{currentDate}</div>
-            <div className="torne-hub-time">{currentTime}</div>
-            <button className="torne-settings-btn" onClick={() => setShowSetup(true)}>設定</button>
-          </div>
-        </header>
-
-        {!mergeSupported && nasneView === 'all' && (
-          <div className="nasne-mode-notice">
-            この画面はマージ表示に未対応のため、{getBoxLabel(targetNasneIp)} を表示しています。
-          </div>
-        )}
-
-        <div className="torne-content-frame">
-          <main className="main-content">
-            {activeTab === 'recordings'   && <RecordingList nasneIps={targetNasneIps} boxNames={boxNames} />}
-            {activeTab === 'reservations' && (
-              <ReservationList
-                nasneIps={targetNasneIps}
-                canCreate={effectiveView !== 'all'}
-                createNasneIp={targetNasneIp}
-                boxNames={boxNames}
-              />
-            )}
-            {activeTab === 'search'       && <SearchView nasneIp={targetNasneIp} />}
-            {activeTab === 'epg'          && (
-              <EpgView
-                nasneIp={targetNasneIp}
-                nhkApiKey={nhkApiKey}
-                nhkArea={nhkArea}
-                onOpenSettings={() => setShowSetup(true)}
-              />
-            )}
-            {activeTab === 'storage'      && <StorageInfo nasneIps={targetNasneIps} />}
-            {activeTab === 'live'         && <LiveView nasneIp={targetNasneIp} />}
-            {activeTab === 'debug'        && <DebugView nasneIp={targetNasneIp} />}
-          </main>
+      {!mergeSupported && nasneView === 'all' && nasneIps.length > 1 && (
+        <div className="nasne-mode-notice">
+          この画面はマージ表示に未対応のため、{boxNames[targetNasneIp] || targetNasneIp} を表示しています。
         </div>
-      </section>
+      )}
+
+      <div className="torne-content-frame">
+        <main className="main-content">
+          {activeTab === 'recordings'   && <RecordingList nasneIps={targetNasneIps} boxNames={boxNames} />}
+          {activeTab === 'reservations' && (
+            <ReservationList
+              nasneIps={targetNasneIps}
+              canCreate={effectiveView !== 'all'}
+              createNasneIp={targetNasneIp}
+              boxNames={boxNames}
+            />
+          )}
+          {activeTab === 'search'       && <SearchView nasneIp={targetNasneIp} />}
+          {activeTab === 'epg'          && (
+            <EpgView
+              nasneIp={targetNasneIp}
+              nhkApiKey={nhkApiKey}
+              nhkArea={nhkArea}
+              onOpenSettings={() => setShowSetup(true)}
+            />
+          )}
+          {activeTab === 'storage'      && <StorageInfo nasneIps={targetNasneIps} />}
+          {activeTab === 'live'         && <LiveView nasneIp={targetNasneIp} />}
+          {activeTab === 'debug'        && <DebugView nasneIp={targetNasneIp} />}
+        </main>
+      </div>
     </div>
   )
 }
