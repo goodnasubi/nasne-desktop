@@ -167,36 +167,79 @@ function AddReservationModal({
 
 // ─── メインコンポーネント ──────────────────────────
 
-type Props = { nasneIp: string }
+type MergedReservation = Reservation & { nasneIp: string; sourceKey: string }
+type Props = {
+  nasneIps: string[]
+  canCreate?: boolean
+  createNasneIp?: string
+  boxNames?: Record<string, string>
+}
 
-export default function ReservationList({ nasneIp }: Props) {
-  const [reservations, setReservations] = useState<Reservation[]>([])
+export default function ReservationList({ nasneIps, canCreate = true, createNasneIp, boxNames = {} }: Props) {
+  const [reservations, setReservations] = useState<MergedReservation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
 
   const fetch = useCallback(async () => {
+    if (nasneIps.length === 0) {
+      setReservations([])
+      setError('nasne が未設定です。設定画面からIPアドレスを登録してください。')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
-      const data = await NasneAPI.getReservationList(nasneIp)
-      setReservations(data?.item ?? [])
+      const settled = await Promise.allSettled(
+        nasneIps.map(async (ip) => {
+          const data = await NasneAPI.getReservationList(ip)
+          return { ip, data }
+        })
+      )
+
+      const merged: MergedReservation[] = []
+      const failedIps: string[] = []
+
+      settled.forEach((res, idx) => {
+        if (res.status === 'fulfilled') {
+          merged.push(
+            ...(res.value.data?.item ?? []).map((r, itemIdx) => ({
+              ...r,
+              nasneIp: res.value.ip,
+              sourceKey: `${res.value.ip}:${r.id || itemIdx}`
+            }))
+          )
+        } else {
+          failedIps.push(nasneIps[idx] ?? 'unknown')
+        }
+      })
+
+      merged.sort((a, b) => b.startDateTime.localeCompare(a.startDateTime))
+      setReservations(merged)
+
+      if (failedIps.length > 0 && merged.length > 0) {
+        setError(`一部nasneで予約一覧の取得に失敗しました: ${failedIps.join(', ')}`)
+      } else if (failedIps.length > 0) {
+        setError(`予約一覧を取得できませんでした: ${failedIps.join(', ')}`)
+      }
     } catch (err) {
       setError(`予約一覧を取得できませんでした。\n${err}`)
     } finally {
       setLoading(false)
     }
-  }, [nasneIp])
+  }, [nasneIps])
 
   useEffect(() => { fetch() }, [fetch])
 
-  const handleDelete = async (res: Reservation) => {
-    if (!confirm(`「${res.title}」の予約を削除しますか？`)) return
-    setDeletingId(res.id)
+  const handleDelete = async (res: MergedReservation) => {
+    if (!confirm(`「${res.title}」の予約を削除しますか？\n対象: ${res.nasneIp}`)) return
+    setDeletingId(res.sourceKey)
     try {
-      await NasneAPI.deleteReservation(nasneIp, res.id)
-      setReservations((prev) => prev.filter((r) => r.id !== res.id))
+      await NasneAPI.deleteReservation(res.nasneIp, res.id)
+      setReservations((prev) => prev.filter((r) => r.sourceKey !== res.sourceKey))
     } catch (err) {
       alert(`削除に失敗しました。\n${err}`)
     } finally {
@@ -205,10 +248,13 @@ export default function ReservationList({ nasneIp }: Props) {
   }
 
   const handleAddReservation = async (form: FormValues) => {
-    // "YYYY-MM-DD" + "HH:MM" → "YYYYMMDDHHmm00"
-    const startDateTime =
-      form.date.replace(/-/g, '') + form.time.replace(':', '') + '00'
-    await NasneAPI.createReservation(nasneIp, {
+    const targetIp = createNasneIp || nasneIps[0]
+    if (!targetIp) {
+      throw new Error('nasne が未設定です')
+    }
+
+    const startDateTime = form.date.replace(/-/g, '') + form.time.replace(':', '') + '00'
+    await NasneAPI.createReservation(targetIp, {
       title: form.title,
       startDateTime,
       duration: Number(form.durationMin) * 60,
@@ -245,12 +291,17 @@ export default function ReservationList({ nasneIp }: Props) {
   return (
     <div className="page">
       <div className="page-header">
-        <h2 className="page-title">録画予約</h2>
+        <div>
+          <h2 className="page-title">録画予約</h2>
+          {!canCreate && <p className="page-subtitle">マージ表示中は予約追加できません。個別表示に切り替えてください。</p>}
+        </div>
         <div className="header-actions">
-          <span className="badge">{reservations.length} 件</span>
-          <button className="btn-primary-sm" onClick={() => setShowModal(true)}>
-            ＋ 予約追加
-          </button>
+          <span className="badge">{reservations.length} 件 / {nasneIps.length}台</span>
+          {canCreate && (
+            <button className="btn-primary-sm" onClick={() => setShowModal(true)}>
+              ＋ 予約追加
+            </button>
+          )}
           <button className="btn-icon" onClick={fetch} title="更新">↻</button>
         </div>
       </div>
@@ -258,14 +309,16 @@ export default function ReservationList({ nasneIp }: Props) {
       {reservations.length === 0 ? (
         <div className="empty-state">
           <p>予約がありません</p>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            最初の予約を追加
-          </button>
+          {canCreate && (
+            <button className="btn-primary" onClick={() => setShowModal(true)}>
+              最初の予約を追加
+            </button>
+          )}
         </div>
       ) : (
         <div className="item-list">
           {reservations.map((res) => (
-            <div key={res.id} className="recording-item">
+            <div key={res.sourceKey} className="recording-item">
               <div className="recording-info">
                 <div className="recording-title">{res.title}</div>
                 <div className="recording-meta">
@@ -274,15 +327,16 @@ export default function ReservationList({ nasneIp }: Props) {
                   {res.chName && <span className="meta-chip" style={getChannelChipStyle(res.chName)}>{res.chName}</span>}
                   <span className="meta-chip meta-chip--quality">{qualityLabel(res.quality)}</span>
                   <span className="meta-chip">{conditionLabel(res.conditionId)}</span>
+                  {nasneIps.length > 1 && <span className="meta-chip meta-chip--nasne" title={`nasne: ${res.nasneIp}`}>{boxNames[res.nasneIp] || res.nasneIp}</span>}
                 </div>
               </div>
               <div className="recording-actions">
                 <button
                   className="btn-danger-sm"
                   onClick={() => handleDelete(res)}
-                  disabled={deletingId === res.id}
+                  disabled={deletingId === res.sourceKey}
                 >
-                  {deletingId === res.id ? '削除中…' : '削除'}
+                  {deletingId === res.sourceKey ? '削除中…' : '削除'}
                 </button>
               </div>
             </div>
@@ -290,7 +344,7 @@ export default function ReservationList({ nasneIp }: Props) {
         </div>
       )}
 
-      {showModal && (
+      {showModal && canCreate && (
         <AddReservationModal
           onClose={() => setShowModal(false)}
           onSubmit={handleAddReservation}

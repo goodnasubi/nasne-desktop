@@ -137,10 +137,11 @@ function normalizeServiceId(serviceId: unknown): string {
   return String(serviceId).trim()
 }
 
-type Props = { nasneIp: string }
+type MergedRecordedTitle = RecordedTitle & { nasneIp: string; sourceKey: string }
+type Props = { nasneIps: string[]; boxNames?: Record<string, string> }
 
-export default function RecordingList({ nasneIp }: Props) {
-  const [recordings, setRecordings] = useState<RecordedTitle[]>([])
+export default function RecordingList({ nasneIps, boxNames = {} }: Props) {
+  const [recordings, setRecordings] = useState<MergedRecordedTitle[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -153,7 +154,6 @@ export default function RecordingList({ nasneIp }: Props) {
   const [onlyNew, setOnlyNew] = useState(false)
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set())
 
-  // グループの展開/縮小をトグル
   const handleToggleGroup = useCallback((groupKey: string) => {
     setExpandedGroups((prev) => {
       const newSet = new Set(prev)
@@ -166,7 +166,6 @@ export default function RecordingList({ nasneIp }: Props) {
     })
   }, [])
 
-  // グループ展開/縮小のトグル切り替え
   const handleGroupToggle = () => {
     const newState = groupToggleState === 'expand' ? 'collapse' : 'expand'
     setGroupToggleState(newState)
@@ -178,63 +177,92 @@ export default function RecordingList({ nasneIp }: Props) {
   }
 
   const fetch = useCallback(async () => {
+    if (nasneIps.length === 0) {
+      setRecordings([])
+      setTotal(0)
+      setLoading(false)
+      setError('nasne が未設定です。設定画面からIPアドレスを登録してください。')
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
-      const data = await NasneAPI.getRecordingList(nasneIp)
-      const recordings = data?.item ?? []
-      setRecordings(recordings)
-      setTotal(data?.totalMatches ?? 0)
+      const settled = await Promise.allSettled(
+        nasneIps.map(async (ip) => {
+          const [recordingRes, serviceRes] = await Promise.allSettled([
+            NasneAPI.getRecordingList(ip),
+            NasneAPI.getServiceList(ip)
+          ])
 
-      const newServiceNames: Record<string, string> = {}
-      recordings.forEach((rec) => {
-        const id = normalizeServiceId(rec.serviceId)
-        if (!id) return
-        if (rec.chName) {
-          newServiceNames[id] = rec.chName
+          const items = recordingRes.status === 'fulfilled'
+            ? (recordingRes.value.item ?? []).map((rec, idx) => ({
+                ...rec,
+                nasneIp: ip,
+                sourceKey: `${ip}:${rec.id || idx}`
+              }))
+            : []
+
+          const serviceMap: Record<string, string> = {}
+          if (serviceRes.status === 'fulfilled') {
+            serviceRes.value.forEach((service) => {
+              const id = normalizeServiceId(service.serviceId)
+              const name = service.name?.trim() || service.serviceName?.trim() || service.channelName?.trim()
+              if (id && name) {
+                serviceMap[id] = name
+              }
+            })
+          }
+
+          return {
+            ip,
+            items,
+            serviceMap,
+            failed: recordingRes.status === 'rejected'
+          }
+        })
+      )
+
+      const merged: MergedRecordedTitle[] = []
+      const nextServiceNames: Record<string, string> = {}
+      const failedIps: string[] = []
+
+      settled.forEach((res) => {
+        if (res.status === 'fulfilled') {
+          merged.push(...res.value.items)
+          Object.assign(nextServiceNames, res.value.serviceMap)
+          if (res.value.failed) failedIps.push(res.value.ip)
         }
       })
-      if (Object.keys(newServiceNames).length > 0) {
-        setServiceNames((prev) => ({ ...prev, ...newServiceNames }))
+
+      merged.sort((a, b) => b.startDateTime.localeCompare(a.startDateTime))
+      setRecordings(merged)
+      setTotal(merged.length)
+      if (Object.keys(nextServiceNames).length > 0) {
+        setServiceNames((prev) => ({ ...prev, ...nextServiceNames }))
+      }
+
+      if (failedIps.length > 0 && merged.length > 0) {
+        setError(`一部nasneで取得に失敗しました: ${failedIps.join(', ')}`)
+      } else if (failedIps.length > 0) {
+        setError(`録画一覧を取得できませんでした。対象: ${failedIps.join(', ')}`)
       }
     } catch (err) {
       setError(`録画一覧を取得できませんでした。\n${err}`)
     } finally {
       setLoading(false)
     }
-  }, [nasneIp])
+  }, [nasneIps])
 
   useEffect(() => { fetch() }, [fetch])
 
-  useEffect(() => {
-    const fetchServiceNames = async () => {
-      try {
-        const services = await NasneAPI.getServiceList(nasneIp)
-        const map: Record<string, string> = {}
-        services.forEach((service) => {
-          const id = normalizeServiceId(service.serviceId)
-          if (!id) return
-          const name = service.name?.trim() || service.serviceName?.trim() || service.channelName?.trim()
-          if (name) {
-            map[id] = name
-          }
-        })
-        if (Object.keys(map).length > 0) {
-          setServiceNames((prev) => ({ ...prev, ...map }))
-        }
-      } catch {
-        // 取得に失敗した場合も、録画タイトル由来の chName を残す
-      }
-    }
-    fetchServiceNames()
-  }, [nasneIp])
-
-  const handleDelete = async (rec: RecordedTitle) => {
-    if (!confirm(`「${rec.title}」を削除しますか？\nこの操作は取り消せません。`)) return
-    setDeletingId(rec.id)
+  const handleDelete = async (rec: MergedRecordedTitle) => {
+    if (!confirm(`「${rec.title}」を削除しますか？\n対象: ${rec.nasneIp}\nこの操作は取り消せません。`)) return
+    setDeletingId(rec.sourceKey)
     try {
-      await NasneAPI.deleteRecording(nasneIp, rec.id)
-      setRecordings((prev) => prev.filter((r) => r.id !== rec.id))
+      await NasneAPI.deleteRecording(rec.nasneIp, rec.id)
+      setRecordings((prev) => prev.filter((r) => r.sourceKey !== rec.sourceKey))
+      setTotal((v) => Math.max(v - 1, 0))
     } catch (err) {
       alert(`削除に失敗しました。\n${err}`)
     } finally {
@@ -250,11 +278,12 @@ export default function RecordingList({ nasneIp }: Props) {
       !search ||
       r.title.toLowerCase().includes(normalizedSearch) ||
       (r.chName ?? '').toLowerCase().includes(normalizedSearch) ||
-      serviceName.toLowerCase().includes(normalizedSearch)
+      serviceName.toLowerCase().includes(normalizedSearch) ||
+      r.nasneIp.includes(normalizedSearch)
     )
   })
 
-  const getChannelGroupKey = (rec: RecordedTitle): string => {
+  const getChannelGroupKey = (rec: MergedRecordedTitle): string => {
     const serviceId = normalizeServiceId(rec.serviceId)
     if (rec.chName) return rec.chName
     if (serviceId && serviceNames[serviceId]) return serviceNames[serviceId]
@@ -262,14 +291,13 @@ export default function RecordingList({ nasneIp }: Props) {
     return 'チャンネル不明'
   }
 
-  const getChannelDisplayName = (rec: RecordedTitle): string | undefined => {
+  const getChannelDisplayName = (rec: MergedRecordedTitle): string | undefined => {
     if (rec.chName) return rec.chName
     const serviceId = normalizeServiceId(rec.serviceId)
     if (serviceId && serviceNames[serviceId]) return serviceNames[serviceId]
     return undefined
   }
 
-  // グルーピング処理
   const grouped = groupBy !== 'none' ? filtered.reduce((acc, rec) => {
     let key: string
 
@@ -293,12 +321,11 @@ export default function RecordingList({ nasneIp }: Props) {
     if (!acc[key]) acc[key] = []
     acc[key].push(rec)
     return acc
-  }, {} as Record<string, RecordedTitle[]>) : null
+  }, {} as Record<string, MergedRecordedTitle[]>) : null
 
-  const getLatestDate = (recs: RecordedTitle[]): string =>
+  const getLatestDate = (recs: MergedRecordedTitle[]): string =>
     recs.reduce((latest, rec) => (rec.startDateTime > latest ? rec.startDateTime : latest), '00000000000000')
 
-  // グループをソート（最新録画日時の降順）
   const sortedGroups = grouped ? Object.entries(grouped).sort(([, recsA], [, recsB]) => {
     const latestA = getLatestDate(recsA)
     const latestB = getLatestDate(recsB)
@@ -306,37 +333,34 @@ export default function RecordingList({ nasneIp }: Props) {
     return recsA[0].title.localeCompare(recsB[0].title)
   }) : null
 
-  // グルーピングモード切り替え時に全グループを展開、トグルスイッチをリセット
   useEffect(() => {
     if (groupBy === 'none' || !grouped) {
       setExpandedGroups(new Set())
       setGroupToggleState('expand')
       return
     }
-    // groupBy が変更されたときだけ全グループを展開
-    // grouped が変更されるたびに実行したくないので、dependency array から grouped を削除
     setExpandedGroups(new Set(Object.keys(grouped)))
     setGroupToggleState('expand')
   }, [groupBy])
 
   // ── 録画アイテムの描画（DRY化） ─────────────────────
-  const renderRecordingItem = (rec: RecordedTitle) => {
+  const renderRecordingItem = (rec: MergedRecordedTitle) => {
     const watchStatus = getWatchStatus(rec)
-    const isDescExpanded = expandedDescriptions.has(rec.id)
+    const isDescExpanded = expandedDescriptions.has(rec.sourceKey)
     const toggleDesc = () => {
       setExpandedDescriptions((prev) => {
         const next = new Set(prev)
-        if (next.has(rec.id)) {
-          next.delete(rec.id)
+        if (next.has(rec.sourceKey)) {
+          next.delete(rec.sourceKey)
         } else {
-          next.add(rec.id)
+          next.add(rec.sourceKey)
         }
         return next
       })
     }
     const chName = getChannelDisplayName(rec)
     return (
-      <div key={rec.id} className="recording-item">
+      <div key={rec.sourceKey} className="recording-item">
         <div className="recording-info">
           <div
             className={`recording-title${rec.description ? ' recording-title--expandable' : ''}`}
@@ -360,6 +384,9 @@ export default function RecordingList({ nasneIp }: Props) {
             {chName && groupBy !== 'channel' && (
               <span className="meta-chip" style={getChannelChipStyle(chName)} title={`チャンネル: ${chName}`}>{chName}</span>
             )}
+            {nasneIps.length > 1 && (
+              <span className="meta-chip meta-chip--nasne" title={`nasne: ${rec.nasneIp}`}>{boxNames[rec.nasneIp] || rec.nasneIp}</span>
+            )}
             {rec.genres && rec.genres.length > 0 && groupBy !== 'genre' && rec.genres.map((g, i) => (
               <span key={`${g}-${i}`} className="meta-chip" style={getGenreChipStyle(g)} title={`ジャンル: ${g}`}>{g}</span>
             ))}
@@ -382,9 +409,9 @@ export default function RecordingList({ nasneIp }: Props) {
             type="button"
             className="btn-danger-sm"
             onClick={() => handleDelete(rec)}
-            disabled={deletingId === rec.id}
+            disabled={deletingId === rec.sourceKey}
           >
-            {deletingId === rec.id ? '削除中…' : '削除'}
+            {deletingId === rec.sourceKey ? '削除中…' : '削除'}
           </button>
         </div>
       </div>
@@ -431,7 +458,7 @@ export default function RecordingList({ nasneIp }: Props) {
       <div className="page-header">
         <h2 className="page-title">録画一覧</h2>
         <div className="header-actions">
-          <span className="badge">{total} 件</span>
+          <span className="badge">{total} 件 / {nasneIps.length}台</span>
 
           {/* グルーピング選択 */}
           <div className="group-selector">
