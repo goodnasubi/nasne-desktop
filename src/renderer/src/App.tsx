@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import RecordingList from './components/RecordingList'
 import ReservationList from './components/ReservationList'
@@ -10,6 +10,16 @@ import EpgView from './components/EpgView'
 import { NHK_AREAS } from './api/nhk'
 
 export type Tab = 'recordings' | 'reservations' | 'search' | 'epg' | 'storage' | 'live' | 'debug'
+
+const TAB_META: Record<Tab, { label: string; icon: string }> = {
+  recordings: { label: '録画一覧', icon: '🎬' },
+  reservations: { label: '録画予約', icon: '📅' },
+  search: { label: '予約追加', icon: '➕' },
+  epg: { label: '番組表', icon: '📺' },
+  storage: { label: 'ストレージ', icon: '💾' },
+  live: { label: 'ライブ視聴', icon: '📡' },
+  debug: { label: '接続テスト', icon: '🔧' }
+}
 
 // ─────────────────────────────────────────────
 // 初回設定画面 (nasne IP 入力)
@@ -113,6 +123,22 @@ export default function App() {
   const [nhkArea, setNhkArea]       = useState(() => localStorage.getItem('nhkArea') ?? '120')
   const [showSetup, setShowSetup]   = useState(() => !localStorage.getItem('nasneIp'))
   const [activeTab, setActiveTab]   = useState<Tab>('recordings')
+  const [now, setNow]               = useState(() => new Date())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000 * 30)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const currentTime = useMemo(
+    () => now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+    [now]
+  )
+
+  const currentDate = useMemo(
+    () => now.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' }),
+    [now]
+  )
 
   const handleSave = (ip: string, apiKey: string, area: string) => {
     setNasneIp(ip);    localStorage.setItem('nasneIp', ip)
@@ -140,22 +166,55 @@ export default function App() {
         onTabChange={setActiveTab}
         onSettingsClick={() => setShowSetup(true)}
       />
-      <main className="main-content">
-        {activeTab === 'recordings'   && <RecordingList  nasneIp={nasneIp} />}
-        {activeTab === 'reservations' && <ReservationList nasneIp={nasneIp} />}
-        {activeTab === 'search'       && <SearchView      nasneIp={nasneIp} />}
-        {activeTab === 'epg'          && (
-          <EpgView
-            nasneIp={nasneIp}
-            nhkApiKey={nhkApiKey}
-            nhkArea={nhkArea}
-            onOpenSettings={() => setShowSetup(true)}
-          />
-        )}
-        {activeTab === 'storage'      && <StorageInfo     nasneIp={nasneIp} />}
-        {activeTab === 'live'         && <LiveView        nasneIp={nasneIp} />}
-        {activeTab === 'debug'        && <DebugView       nasneIp={nasneIp} />}
-      </main>
+      <section className="torne-stage">
+        <header className="torne-hub-bar">
+          <div className="torne-hub-now">
+            <span className="torne-hub-icon">{TAB_META[activeTab].icon}</span>
+            <div className="torne-hub-meta">
+              <span className="torne-hub-label">{TAB_META[activeTab].label}</span>
+              <span className="torne-hub-sub">nasne / {nasneIp}</span>
+            </div>
+          </div>
+
+          <div className="torne-channel-strip" role="tablist" aria-label="クイック切り替え">
+            {(['recordings', 'reservations', 'epg', 'live'] as Tab[]).map((tab) => (
+              <button
+                key={tab}
+                className={`torne-channel-chip ${activeTab === tab ? 'torne-channel-chip--active' : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                <span>{TAB_META[tab].icon}</span>
+                <span>{TAB_META[tab].label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="torne-hub-clock">
+            <div className="torne-hub-date">{currentDate}</div>
+            <div className="torne-hub-time">{currentTime}</div>
+            <button className="torne-settings-btn" onClick={() => setShowSetup(true)}>設定</button>
+          </div>
+        </header>
+
+        <div className="torne-content-frame">
+          <main className="main-content">
+            {activeTab === 'recordings'   && <RecordingList  nasneIp={nasneIp} />}
+            {activeTab === 'reservations' && <ReservationList nasneIp={nasneIp} />}
+            {activeTab === 'search'       && <SearchView      nasneIp={nasneIp} />}
+            {activeTab === 'epg'          && (
+              <EpgView
+                nasneIp={nasneIp}
+                nhkApiKey={nhkApiKey}
+                nhkArea={nhkArea}
+                onOpenSettings={() => setShowSetup(true)}
+              />
+            )}
+            {activeTab === 'storage'      && <StorageInfo     nasneIp={nasneIp} />}
+            {activeTab === 'live'         && <LiveView        nasneIp={nasneIp} />}
+            {activeTab === 'debug'        && <DebugView       nasneIp={nasneIp} />}
+          </main>
+        </div>
+      </section>
     </div>
   )
 }
