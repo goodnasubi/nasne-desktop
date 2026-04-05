@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { Tab } from '../App'
 
 type NavItem = {
@@ -24,15 +25,36 @@ type Props = {
 }
 
 export default function Sidebar({ activeTab, nasneIp, onTabChange, onSettingsClick }: Props) {
+  const [collapsed, setCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed')
+    if (saved === null) return true
+    return saved === '1'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0')
+  }, [collapsed])
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}>
       {/* ロゴ・タイトル */}
       <div className="sidebar-header">
-        <span className="sidebar-logo">📺</span>
-        <div>
-          <div className="sidebar-app-name">nasne Desktop</div>
-          <div className="sidebar-ip">{nasneIp}</div>
+        <div className="sidebar-brand">
+          <span className="sidebar-logo">📺</span>
+          <div className="sidebar-title-wrap">
+            <div className="sidebar-app-name">nasne Desktop</div>
+            <div className="sidebar-ip">{nasneIp}</div>
+          </div>
         </div>
+
+        <button
+          className="sidebar-collapse-btn"
+          onClick={() => setCollapsed(v => !v)}
+          aria-label={collapsed ? 'サイドバーを展開' : 'サイドバーを縮小'}
+          title={collapsed ? '展開' : '縮小'}
+        >
+          {collapsed ? '»' : '«'}
+        </button>
       </div>
 
       {/* ナビゲーション */}
@@ -42,6 +64,7 @@ export default function Sidebar({ activeTab, nasneIp, onTabChange, onSettingsCli
             key={item.id}
             className={`nav-item ${activeTab === item.id ? 'nav-item--active' : ''}`}
             onClick={() => onTabChange(item.id)}
+            title={collapsed ? item.label : undefined}
           >
             <span className="nav-item-icon">{item.icon}</span>
             <span className="nav-item-label">{item.label}</span>
@@ -51,7 +74,7 @@ export default function Sidebar({ activeTab, nasneIp, onTabChange, onSettingsCli
 
       {/* 設定ボタン */}
       <div className="sidebar-footer">
-        <button className="nav-item" onClick={onSettingsClick}>
+        <button className="nav-item" onClick={onSettingsClick} title={collapsed ? '設定' : undefined}>
           <span className="nav-item-icon">⚙️</span>
           <span className="nav-item-label">設定</span>
         </button>
